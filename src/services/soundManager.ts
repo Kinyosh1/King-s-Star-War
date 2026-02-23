@@ -9,7 +9,12 @@ class SoundManager {
   }
 
   private init() {
-    if (this.ctx) return;
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
+      return;
+    }
     this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     this.masterGain = this.ctx.createGain();
     this.masterGain.connect(this.ctx.destination);
@@ -26,6 +31,10 @@ class SoundManager {
   toggleMute() {
     this.setMute(!this.isMuted);
     return this.isMuted;
+  }
+
+  public resumeContext() {
+    this.init();
   }
 
   // Synthesize an explosion sound

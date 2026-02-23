@@ -81,6 +81,7 @@ export default function App() {
 
   // Initialize Game
   const initGame = useCallback((mode: GameMode = GameMode.CLASSIC) => {
+    soundManager.resumeContext();
     const groundY = GAME_HEIGHT - 40;
     setGameMode(mode);
     
@@ -252,8 +253,37 @@ export default function App() {
     if (!ctx || !canvas) return;
 
     // Clear Canvas
-    ctx.fillStyle = 'rgba(5, 5, 5, 1)';
+    ctx.fillStyle = '#050505';
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    // Draw Stars
+    ctx.fillStyle = '#fff';
+    stars.current.forEach(star => {
+      const opacity = 0.3 + Math.sin(gameTimeRef.current * (5 / star.duration)) * 0.3;
+      ctx.globalAlpha = opacity;
+      ctx.beginPath();
+      ctx.arc((star.x / 100) * GAME_WIDTH, (star.y / 100) * GAME_HEIGHT, star.size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1.0;
+
+    // Draw Planets
+    planets.current.forEach(planet => {
+      ctx.save();
+      ctx.globalAlpha = planet.opacity;
+      const px = (planet.x / 100) * GAME_WIDTH;
+      const py = (planet.y / 100) * GAME_HEIGHT;
+      
+      const grad = ctx.createRadialGradient(px, py, 0, px, py, planet.size);
+      grad.addColorStop(0, planet.color);
+      grad.addColorStop(1, 'transparent');
+      
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(px, py, planet.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
 
     // Update & Draw Rockets
     rocketsRef.current.forEach((rocket) => {
@@ -269,17 +299,17 @@ export default function App() {
       ctx.beginPath();
       ctx.moveTo(rocket.start.x, rocket.start.y);
       ctx.lineTo(rocket.current.x, rocket.current.y);
-      ctx.strokeStyle = 'rgba(255, 80, 80, 0.2)';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255, 100, 100, 0.5)';
+      ctx.lineWidth = 6; // Even thicker trail
       ctx.stroke();
 
-      // Rocket head glow
+      // Rocket head with glow
       ctx.save();
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 20;
       ctx.shadowColor = '#ff4444';
       ctx.fillStyle = '#ff4444';
       ctx.beginPath();
-      ctx.arc(rocket.current.x, rocket.current.y, 3, 0, Math.PI * 2);
+      ctx.arc(rocket.current.x, rocket.current.y, 6, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
@@ -345,13 +375,13 @@ export default function App() {
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Missile head glow
+      // Missile head with glow
       ctx.save();
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 20;
       ctx.shadowColor = missile.isSuper ? '#f59e0b' : '#00f2ff';
       ctx.fillStyle = missile.isSuper ? '#fbbf24' : '#00f2ff';
       ctx.beginPath();
-      ctx.arc(missile.current.x, missile.current.y, 4, 0, Math.PI * 2);
+      ctx.arc(missile.current.x, missile.current.y, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
@@ -402,10 +432,10 @@ export default function App() {
     powerUpsRef.current.forEach(pu => {
       pu.timer -= deltaTime;
       
-      // Draw Power-Up (3x size of enemy rocket which is arc radius 3)
-      const puRadius = 20; 
+      // Draw Power-Up
+      const puRadius = 22; 
       ctx.save();
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 20;
       ctx.shadowColor = pu.type === PowerUpType.HEALTH ? '#ef4444' : pu.type === PowerUpType.SHIELD ? '#3b82f6' : pu.type === PowerUpType.AMMO ? '#10b981' : '#f59e0b';
       
       // Pulse effect for timer
@@ -521,7 +551,7 @@ export default function App() {
       if (!city.destroyed) {
         // Futuristic Dome City
         ctx.save();
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 20;
         ctx.shadowColor = '#3b82f6';
         
         // Base
@@ -559,7 +589,7 @@ export default function App() {
     turretsRef.current.forEach(turret => {
       if (!turret.destroyed) {
         ctx.save();
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 20;
         ctx.shadowColor = '#10b981';
         
         // Base platform
@@ -649,22 +679,15 @@ export default function App() {
     return () => clearTimeout(spawnTimeout);
   }, [gameState, spawnRocket]);
 
-  const handleCanvasClick = (e: React.MouseEvent | React.TouchEvent | React.PointerEvent) => {
+  const handleCanvasClick = (e: React.PointerEvent) => {
     if (gameState !== GameState.PLAYING) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    let clientX, clientY;
-
-    if ('touches' in e) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = (e as any).clientX;
-      clientY = (e as any).clientY;
-    }
+    const clientX = e.clientX;
+    const clientY = e.clientY;
 
     const x = (clientX - rect.left) * (GAME_WIDTH / rect.width);
     const y = (clientY - rect.top) * (GAME_HEIGHT / rect.height);
@@ -705,58 +728,32 @@ export default function App() {
       ref={containerRef}
       className="relative w-full h-screen flex flex-col items-center justify-center bg-black overflow-hidden font-sans"
     >
-      {/* Background Stars & Nebula */}
-      <div className="stars-container absolute inset-0 pointer-events-none">
-        {stars.current.map((star, i) => (
-          <div 
-            key={i} 
-            className="star" 
-            style={{ 
-              left: `${star.x}%`, 
-              top: `${star.y}%`, 
-              width: `${star.size}px`, 
-              height: `${star.size}px`,
-              '--duration': `${star.duration}s` 
-            } as any} 
-          />
-        ))}
-        {planets.current.map((planet, i) => (
-          <div 
-            key={`planet-${i}`}
-            className="planet"
-            style={{
-              left: `${planet.x}%`,
-              top: `${planet.y}%`,
-              width: `${planet.size}px`,
-              height: `${planet.size}px`,
-              backgroundColor: planet.color,
-              opacity: planet.opacity,
-              transform: 'translate(-50%, -50%)'
-            }}
-          />
-        ))}
+      {/* Background Nebula & Scanline (Static/Slow effects) */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="nebula top-1/4 left-1/4"></div>
         <div className="nebula bottom-1/4 right-1/4 bg-indigo-500/10"></div>
         <div className="scanline"></div>
       </div>
 
-      {/* Header HUD - Always visible but lower z-index than overlays */}
+      {/* Header HUD */}
       <div className="absolute top-0 left-0 right-0 p-4 md:p-6 flex justify-between items-start z-[60] pointer-events-none">
-        <div className="flex flex-col gap-1 md:gap-2">
-          <div className="flex items-center gap-2 md:gap-3 text-emerald-400 font-display text-lg md:text-2xl tracking-widest glitch-text">
-            <Trophy className="w-5 h-5 md:w-6 md:h-6" />
-            <span>{t.score}: {score} {gameMode === GameMode.CLASSIC && `/ ${WIN_SCORE}`}</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-zinc-500 font-mono text-[10px] md:text-xs uppercase tracking-[0.2em] md:tracking-[0.4em]">
-              <Zap className="w-3 h-3" />
-              <span>{t.level}: {Math.floor(displayTime / 10) + 1}</span>
+        {gameState === GameState.PLAYING ? (
+          <div className="flex flex-col gap-1 md:gap-2">
+            <div className="flex items-center gap-2 md:gap-3 text-emerald-400 font-display text-lg md:text-2xl tracking-widest glitch-text">
+              <Trophy className="w-5 h-5 md:w-6 md:h-6" />
+              <span>{t.score}: {score} {gameMode === GameMode.CLASSIC && `/ ${WIN_SCORE}`}</span>
             </div>
-            <div className="px-1.5 py-0.5 bg-blue-500/20 border border-blue-500/30 rounded text-[8px] md:text-[10px] text-blue-400 font-mono tracking-widest">
-              {gameMode === GameMode.CLASSIC ? t.classicMode : t.endlessMode}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-zinc-500 font-mono text-[10px] md:text-xs uppercase tracking-[0.2em] md:tracking-[0.4em]">
+                <Zap className="w-3 h-3" />
+                <span>{t.level}: {Math.floor(displayTime / 10) + 1}</span>
+              </div>
+              <div className="px-1.5 py-0.5 bg-blue-500/20 border border-blue-500/30 rounded text-[8px] md:text-[10px] text-blue-400 font-mono tracking-widest">
+                {gameMode === GameMode.CLASSIC ? t.classicMode : t.endlessMode}
+              </div>
             </div>
           </div>
-        </div>
+        ) : <div />}
 
         {/* HUD Language Toggle - Only visible when playing */}
         {gameState === GameState.PLAYING && (
@@ -789,7 +786,8 @@ export default function App() {
           width={GAME_WIDTH}
           height={GAME_HEIGHT}
           onPointerDown={(e) => {
-            // PointerDown handles both touch and mouse consistently
+            // Prevent default to avoid double-firing and scrolling
+            if (e.pointerType === 'touch') e.preventDefault();
             handleCanvasClick(e);
           }}
           className="w-full h-full object-contain cursor-crosshair touch-none"
@@ -846,7 +844,7 @@ export default function App() {
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
-              className="mb-6 md:mb-12 mt-12 md:mt-0 relative"
+              className="mb-8 md:mb-16 mt-20 md:mt-0 relative"
             >
               <div className="absolute -inset-10 bg-blue-500/20 blur-[100px] rounded-full animate-pulse"></div>
               <h1 className="text-4xl sm:text-6xl md:text-9xl font-display font-bold text-white mb-2 tracking-tighter glitch-text relative z-10">
