@@ -59,6 +59,7 @@ export default function App() {
   const startTimeRef = useRef<number>(0);
   const gameTimeRef = useRef<number>(0);
   const lastPowerUpTimeRef = useRef<number>(0);
+  const lastPowerUpScoreRef = useRef<number>(0);
   const superMissileTimerRef = useRef<number>(0);
   const t = TRANSLATIONS[lang];
 
@@ -102,6 +103,7 @@ export default function App() {
     setDisplayTime(0);
     gameTimeRef.current = 0;
     lastPowerUpTimeRef.current = 0;
+    lastPowerUpScoreRef.current = 0;
     superMissileTimerRef.current = 0;
     startTimeRef.current = Date.now();
     setGameState(GameState.PLAYING);
@@ -222,6 +224,13 @@ export default function App() {
         lastPowerUpTimeRef.current = Math.floor(gameTimeRef.current / 10) * 10;
         spawnPowerUp();
       }
+    }
+
+    // Check for power-up spawn (Every 500 points, spawn 2)
+    if (score >= lastPowerUpScoreRef.current + 500) {
+      lastPowerUpScoreRef.current = Math.floor(score / 500) * 500;
+      spawnPowerUp();
+      spawnPowerUp();
     }
 
     // Update UI time occasionally (every 0.5s) to save performance
