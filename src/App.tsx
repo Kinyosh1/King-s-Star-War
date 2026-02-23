@@ -45,6 +45,7 @@ export default function App() {
   const [displayTime, setDisplayTime] = useState(0); // Only for UI
   const [lang, setLang] = useState<'en' | 'cn'>('cn');
   const [isMuted, setIsMuted] = useState(false);
+  const isMobile = useRef(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -261,9 +262,15 @@ export default function App() {
     stars.current.forEach(star => {
       const opacity = 0.3 + Math.sin(gameTimeRef.current * (5 / star.duration)) * 0.3;
       ctx.globalAlpha = opacity;
-      ctx.beginPath();
-      ctx.arc((star.x / 100) * GAME_WIDTH, (star.y / 100) * GAME_HEIGHT, star.size, 0, Math.PI * 2);
-      ctx.fill();
+      const sx = (star.x / 100) * GAME_WIDTH;
+      const sy = (star.y / 100) * GAME_HEIGHT;
+      if (star.size > 1.5) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, star.size, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillRect(sx, sy, star.size, star.size);
+      }
     });
     ctx.globalAlpha = 1.0;
 
@@ -304,14 +311,21 @@ export default function App() {
       ctx.stroke();
 
       // Rocket head with glow
-      ctx.save();
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = '#ff4444';
-      ctx.fillStyle = '#ff4444';
-      ctx.beginPath();
-      ctx.arc(rocket.current.x, rocket.current.y, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      if (!isMobile.current) {
+        ctx.save();
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#ff4444';
+        ctx.fillStyle = '#ff4444';
+        ctx.beginPath();
+        ctx.arc(rocket.current.x, rocket.current.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else {
+        ctx.fillStyle = '#ff4444';
+        ctx.beginPath();
+        ctx.arc(rocket.current.x, rocket.current.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       if (rocket.current.y >= rocket.end.y) {
         rocket.destroyed = true;
@@ -376,14 +390,21 @@ export default function App() {
       ctx.stroke();
 
       // Missile head with glow
-      ctx.save();
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = missile.isSuper ? '#f59e0b' : '#00f2ff';
-      ctx.fillStyle = missile.isSuper ? '#fbbf24' : '#00f2ff';
-      ctx.beginPath();
-      ctx.arc(missile.current.x, missile.current.y, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      if (!isMobile.current) {
+        ctx.save();
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = missile.isSuper ? '#f59e0b' : '#00f2ff';
+        ctx.fillStyle = missile.isSuper ? '#fbbf24' : '#00f2ff';
+        ctx.beginPath();
+        ctx.arc(missile.current.x, missile.current.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else {
+        ctx.fillStyle = missile.isSuper ? '#fbbf24' : '#00f2ff';
+        ctx.beginPath();
+        ctx.arc(missile.current.x, missile.current.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       const distToTarget = Math.sqrt(
         Math.pow(missile.target.x - missile.current.x, 2) + 
@@ -434,9 +455,13 @@ export default function App() {
       
       // Draw Power-Up
       const puRadius = 22; 
-      ctx.save();
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = pu.type === PowerUpType.HEALTH ? '#ef4444' : pu.type === PowerUpType.SHIELD ? '#3b82f6' : pu.type === PowerUpType.AMMO ? '#10b981' : '#f59e0b';
+      if (!isMobile.current) {
+        ctx.save();
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = pu.type === PowerUpType.HEALTH ? '#ef4444' : pu.type === PowerUpType.SHIELD ? '#3b82f6' : pu.type === PowerUpType.AMMO ? '#10b981' : '#f59e0b';
+      } else {
+        ctx.save();
+      }
       
       // Pulse effect for timer
       const scale = 1 + Math.sin(gameTimeRef.current * 10) * 0.1;
@@ -551,8 +576,10 @@ export default function App() {
       if (!city.destroyed) {
         // Futuristic Dome City
         ctx.save();
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = '#3b82f6';
+        if (!isMobile.current) {
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = '#3b82f6';
+        }
         
         // Base
         ctx.fillStyle = '#1e3a8a';
@@ -589,8 +616,10 @@ export default function App() {
     turretsRef.current.forEach(turret => {
       if (!turret.destroyed) {
         ctx.save();
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = '#10b981';
+        if (!isMobile.current) {
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = '#10b981';
+        }
         
         // Base platform
         ctx.fillStyle = '#064e3b';
@@ -728,6 +757,10 @@ export default function App() {
       ref={containerRef}
       className="relative w-full h-screen flex flex-col items-center justify-center bg-black overflow-hidden font-sans"
     >
+      <div 
+        className="absolute inset-0 z-0" 
+        onPointerDown={() => soundManager.resumeContext()}
+      />
       {/* Background Nebula & Scanline (Static/Slow effects) */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="nebula top-1/4 left-1/4"></div>

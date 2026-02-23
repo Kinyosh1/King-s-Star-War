@@ -19,6 +19,13 @@ class SoundManager {
     this.masterGain = this.ctx.createGain();
     this.masterGain.connect(this.ctx.destination);
     this.masterGain.gain.value = this.isMuted ? 0 : 0.3;
+
+    // Play a silent buffer to unlock audio on iOS
+    const buffer = this.ctx.createBuffer(1, 1, 22050);
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(this.ctx.destination);
+    source.start(0);
   }
 
   setMute(mute: boolean) {
@@ -35,6 +42,9 @@ class SoundManager {
 
   public resumeContext() {
     this.init();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
   }
 
   // Synthesize an explosion sound

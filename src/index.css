@@ -57,8 +57,8 @@
   position: absolute;
   width: 800px;
   height: 800px;
-  background: radial-gradient(circle, rgba(63, 94, 251, 0.15) 0%, rgba(252, 70, 107, 0.08) 50%, transparent 100%);
-  filter: blur(60px);
+  background: radial-gradient(circle, rgba(63, 94, 251, 0.12) 0%, rgba(252, 70, 107, 0.05) 50%, transparent 100%);
+  filter: blur(40px);
   border-radius: 50%;
   pointer-events: none;
   animation: float 20s ease-in-out infinite alternate;
