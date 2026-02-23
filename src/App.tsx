@@ -5,7 +5,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Target, Zap, Trophy, RefreshCw, Languages, Info, Rocket as RocketIcon } from 'lucide-react';
+import { Shield, Target, Zap, Trophy, RefreshCw, Languages, Info, Rocket as RocketIcon, Volume2, VolumeX } from 'lucide-react';
+import { soundManager } from './services/soundManager';
 import { 
   GameState, 
   GameMode,
@@ -43,6 +44,7 @@ export default function App() {
   const [score, setScore] = useState(0);
   const [displayTime, setDisplayTime] = useState(0); // Only for UI
   const [lang, setLang] = useState<'en' | 'cn'>('cn');
+  const [isMuted, setIsMuted] = useState(false);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -64,12 +66,18 @@ export default function App() {
   const t = TRANSLATIONS[lang];
 
   // Stars for background
-  const stars = useRef(Array.from({ length: 100 }).map(() => ({
+  const stars = useRef(Array.from({ length: 150 }).map(() => ({
     x: Math.random() * 100,
     y: Math.random() * 100,
-    size: Math.random() * 2 + 1,
+    size: Math.random() * 2 + 0.5,
     duration: Math.random() * 3 + 2
   })));
+
+  const planets = useRef([
+    { x: 15, y: 20, size: 80, color: '#3b82f6', opacity: 0.3 },
+    { x: 85, y: 15, size: 120, color: '#ef4444', opacity: 0.2 },
+    { x: 50, y: 40, size: 40, color: '#f59e0b', opacity: 0.25 },
+  ]);
 
   // Initialize Game
   const initGame = useCallback((mode: GameMode = GameMode.CLASSIC) => {
@@ -107,6 +115,7 @@ export default function App() {
     superMissileTimerRef.current = 0;
     startTimeRef.current = Date.now();
     setGameState(GameState.PLAYING);
+    soundManager.startBGM();
   }, []);
 
   const spawnRocket = useCallback(() => {
@@ -157,6 +166,7 @@ export default function App() {
   }, []);
 
   const applyPowerUp = useCallback((type: PowerUpType) => {
+    soundManager.playPowerUp();
     switch (type) {
       case PowerUpType.HEALTH: {
         // Heal/Revive Turret
@@ -226,8 +236,8 @@ export default function App() {
       }
     }
 
-    // Check for power-up spawn (Every 500 points, spawn 2)
-    if (score >= lastPowerUpScoreRef.current + 500) {
+    // Check for power-up spawn (Every 500 points, spawn 2, Endless mode only)
+    if (gameMode === GameMode.ENDLESS && score >= lastPowerUpScoreRef.current + 500) {
       lastPowerUpScoreRef.current = Math.floor(score / 500) * 500;
       spawnPowerUp();
       spawnPowerUp();
@@ -260,17 +270,23 @@ export default function App() {
       ctx.beginPath();
       ctx.moveTo(rocket.start.x, rocket.start.y);
       ctx.lineTo(rocket.current.x, rocket.current.y);
-      ctx.strokeStyle = 'rgba(255, 80, 80, 0.4)';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255, 80, 80, 0.2)';
+      ctx.lineWidth = 1;
       ctx.stroke();
 
+      // Rocket head glow
+      ctx.save();
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#ff4444';
       ctx.fillStyle = '#ff4444';
       ctx.beginPath();
       ctx.arc(rocket.current.x, rocket.current.y, 3, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
 
       if (rocket.current.y >= rocket.end.y) {
         rocket.destroyed = true;
+        soundManager.playExplosion();
         explosionsRef.current.push({
           id: Math.random().toString(),
           x: rocket.current.x,
@@ -316,23 +332,29 @@ export default function App() {
       ctx.beginPath();
       ctx.moveTo(missile.start.x, missile.start.y);
       ctx.lineTo(missile.current.x, missile.current.y);
-      ctx.strokeStyle = 'rgba(100, 220, 255, 0.5)';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(missile.target.x - 6, missile.target.y - 6);
-      ctx.lineTo(missile.target.x + 6, missile.target.y + 6);
-      ctx.moveTo(missile.target.x + 6, missile.target.y - 6);
-      ctx.lineTo(missile.target.x - 6, missile.target.y + 6);
-      ctx.strokeStyle = '#00f2ff';
+      ctx.strokeStyle = missile.isSuper ? 'rgba(245, 158, 11, 0.3)' : 'rgba(100, 220, 255, 0.3)';
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      ctx.fillStyle = '#00f2ff';
+      // Target marker
+      ctx.beginPath();
+      ctx.moveTo(missile.target.x - 8, missile.target.y - 8);
+      ctx.lineTo(missile.target.x + 8, missile.target.y + 8);
+      ctx.moveTo(missile.target.x + 8, missile.target.y - 8);
+      ctx.lineTo(missile.target.x - 8, missile.target.y + 8);
+      ctx.strokeStyle = missile.isSuper ? '#f59e0b' : '#00f2ff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Missile head glow
+      ctx.save();
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = missile.isSuper ? '#f59e0b' : '#00f2ff';
+      ctx.fillStyle = missile.isSuper ? '#fbbf24' : '#00f2ff';
       ctx.beginPath();
       ctx.arc(missile.current.x, missile.current.y, 4, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
 
       const distToTarget = Math.sqrt(
         Math.pow(missile.target.x - missile.current.x, 2) + 
@@ -341,6 +363,7 @@ export default function App() {
 
       if (distToTarget < missile.speed) {
         missile.exploded = true;
+        soundManager.playExplosion();
         const radius = missile.isSuper ? EXPLOSION_MAX_RADIUS * SUPER_MISSILE_RADIUS_MULT : EXPLOSION_MAX_RADIUS;
         explosionsRef.current.push({
           id: Math.random().toString(),
@@ -473,23 +496,58 @@ export default function App() {
     // Draw Ground
     ctx.fillStyle = '#0a0a1a';
     ctx.fillRect(0, GAME_HEIGHT - 40, GAME_WIDTH, 40);
+    
+    // Grid effect on ground
     ctx.strokeStyle = '#1e3a8a';
+    ctx.lineWidth = 1;
+    for(let i = 0; i <= GAME_WIDTH; i += 50) {
+      ctx.beginPath();
+      ctx.moveTo(i, GAME_HEIGHT - 40);
+      ctx.lineTo(i, GAME_HEIGHT);
+      ctx.stroke();
+    }
+    for(let i = 0; i <= 40; i += 10) {
+      ctx.beginPath();
+      ctx.moveTo(0, GAME_HEIGHT - 40 + i);
+      ctx.lineTo(GAME_WIDTH, GAME_HEIGHT - 40 + i);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = '#3b82f6';
     ctx.lineWidth = 2;
     ctx.strokeRect(0, GAME_HEIGHT - 40, GAME_WIDTH, 1);
 
     // Draw Cities
     citiesRef.current.forEach(city => {
       if (!city.destroyed) {
-        ctx.fillStyle = '#3b82f6';
-        ctx.fillRect(city.x - 18, city.y - 20, 36, 20);
-        ctx.fillStyle = '#60a5fa';
-        ctx.fillRect(city.x - 10, city.y - 25, 20, 10);
-        ctx.fillStyle = '#fbbf24';
-        for(let i=0; i<3; i++) {
-          for(let j=0; j<2; j++) {
-            ctx.fillRect(city.x - 14 + i*10, city.y - 16 + j*6, 4, 4);
-          }
-        }
+        // Futuristic Dome City
+        ctx.save();
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#3b82f6';
+        
+        // Base
+        ctx.fillStyle = '#1e3a8a';
+        ctx.fillRect(city.x - 20, city.y - 5, 40, 5);
+        
+        // Dome
+        const gradient = ctx.createRadialGradient(city.x, city.y - 5, 0, city.x, city.y - 5, 25);
+        gradient.addColorStop(0, 'rgba(96, 165, 250, 0.6)');
+        gradient.addColorStop(1, 'rgba(30, 58, 138, 0.4)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(city.x, city.y - 5, 20, Math.PI, 0);
+        ctx.fill();
+        ctx.strokeStyle = '#60a5fa';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Internal structures
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(city.x - 10, city.y - 15, 4, 10);
+        ctx.fillRect(city.x + 6, city.y - 12, 4, 7);
+        ctx.fillRect(city.x - 2, city.y - 18, 4, 13);
+        
+        ctx.restore();
       } else {
         ctx.fillStyle = '#1e293b';
         ctx.beginPath();
@@ -501,26 +559,44 @@ export default function App() {
     // Draw Turrets
     turretsRef.current.forEach(turret => {
       if (!turret.destroyed) {
+        ctx.save();
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#10b981';
+        
+        // Base platform
+        ctx.fillStyle = '#064e3b';
+        ctx.beginPath();
+        ctx.ellipse(turret.x, turret.y, 30, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Cannon body
         ctx.fillStyle = '#10b981';
         ctx.beginPath();
-        ctx.arc(turret.x, turret.y, 25, Math.PI, 0);
+        ctx.arc(turret.x, turret.y - 10, 15, 0, Math.PI * 2);
         ctx.fill();
+        
+        // Cannon barrel
         ctx.fillStyle = '#059669';
-        ctx.fillRect(turret.x - 5, turret.y - 35, 10, 20);
+        ctx.fillRect(turret.x - 6, turret.y - 35, 12, 25);
+        ctx.strokeStyle = '#34d399';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(turret.x - 6, turret.y - 35, 12, 25);
         
         // Shield
         if (turret.hasShield) {
           ctx.beginPath();
-          ctx.arc(turret.x, turret.y, 35, Math.PI, 0);
+          ctx.arc(turret.x, turret.y - 10, 40, 0, Math.PI * 2);
           ctx.strokeStyle = '#3b82f6';
-          ctx.lineWidth = 3;
+          ctx.setLineDash([5, 5]);
+          ctx.lineWidth = 2;
           ctx.stroke();
-          ctx.fillStyle = 'rgba(59, 130, 246, 0.2)';
+          ctx.setLineDash([]);
+          ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
           ctx.fill();
         }
         
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 12px JetBrains Mono';
+        ctx.font = 'bold 12px Orbitron';
         ctx.textAlign = 'center';
         ctx.fillText(`${turret.ammo}`, turret.x, turret.y + 15);
 
@@ -534,6 +610,7 @@ export default function App() {
         const healthPercent = turret.health / turret.maxHealth;
         ctx.fillStyle = healthPercent > 0.6 ? '#10b981' : healthPercent > 0.3 ? '#f59e0b' : '#ef4444';
         ctx.fillRect(turret.x - barWidth / 2, barY, barWidth * healthPercent, barHeight);
+        ctx.restore();
       } else {
         ctx.fillStyle = '#450a0a';
         ctx.beginPath();
@@ -609,6 +686,7 @@ export default function App() {
     if (bestTurret) {
       const turret = bestTurret as Turret;
       turret.ammo--;
+      soundManager.playLaunch();
       const isSuper = superMissileTimerRef.current > 0;
       missilesRef.current.push({
         id: Math.random().toString(),
@@ -643,45 +721,70 @@ export default function App() {
             } as any} 
           />
         ))}
+        {planets.current.map((planet, i) => (
+          <div 
+            key={`planet-${i}`}
+            className="planet"
+            style={{
+              left: `${planet.x}%`,
+              top: `${planet.y}%`,
+              width: `${planet.size}px`,
+              height: `${planet.size}px`,
+              backgroundColor: planet.color,
+              opacity: planet.opacity,
+              transform: 'translate(-50%, -50%)'
+            }}
+          />
+        ))}
         <div className="nebula top-1/4 left-1/4"></div>
         <div className="nebula bottom-1/4 right-1/4 bg-indigo-500/10"></div>
         <div className="scanline"></div>
       </div>
 
       {/* Header HUD - Always visible but lower z-index than overlays */}
-      <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-10 pointer-events-none">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-3 text-emerald-400 font-display text-2xl tracking-widest glitch-text">
-                <Trophy className="w-6 h-6" />
-                <span>{t.score}: {score} {gameMode === GameMode.CLASSIC && `/ ${WIN_SCORE}`}</span>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 text-zinc-500 font-mono text-xs uppercase tracking-[0.4em]">
-                  <Zap className="w-3 h-3" />
-                  <span>{t.level}: {Math.floor(displayTime / 10) + 1}</span>
-                </div>
-                <div className="px-2 py-0.5 bg-blue-500/20 border border-blue-500/30 rounded text-[10px] text-blue-400 font-mono tracking-widest">
-                  {gameMode === GameMode.CLASSIC ? t.classicMode : t.endlessMode}
-                </div>
-              </div>
+      <div className="absolute top-0 left-0 right-0 p-4 md:p-6 flex justify-between items-start z-10 pointer-events-none">
+        <div className="flex flex-col gap-1 md:gap-2">
+          <div className="flex items-center gap-2 md:gap-3 text-emerald-400 font-display text-lg md:text-2xl tracking-widest glitch-text">
+            <Trophy className="w-5 h-5 md:w-6 md:h-6" />
+            <span>{t.score}: {score} {gameMode === GameMode.CLASSIC && `/ ${WIN_SCORE}`}</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-zinc-500 font-mono text-[10px] md:text-xs uppercase tracking-[0.2em] md:tracking-[0.4em]">
+              <Zap className="w-3 h-3" />
+              <span>{t.level}: {Math.floor(displayTime / 10) + 1}</span>
             </div>
+            <div className="px-1.5 py-0.5 bg-blue-500/20 border border-blue-500/30 rounded text-[8px] md:text-[10px] text-blue-400 font-mono tracking-widest">
+              {gameMode === GameMode.CLASSIC ? t.classicMode : t.endlessMode}
+            </div>
+          </div>
+        </div>
 
         {/* HUD Language Toggle - Only visible when playing */}
         {gameState === GameState.PLAYING && (
-          <div className="flex gap-4 pointer-events-auto">
+          <div className="flex gap-2 md:gap-4 pointer-events-auto">
+            <button 
+              onClick={() => {
+                const muted = soundManager.toggleMute();
+                setIsMuted(muted);
+              }}
+              className="p-1.5 md:p-2 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all text-white"
+            >
+              {isMuted ? <VolumeX className="w-4 h-4 md:w-5 md:h-5" /> : <Volume2 className="w-4 h-4 md:w-5 md:h-5" />}
+            </button>
             <button 
               onClick={() => setLang(l => l === 'en' ? 'cn' : 'en')}
-              className="px-4 py-2 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all flex items-center gap-2 text-xs font-mono tracking-widest"
+              className="px-3 py-1.5 md:px-4 md:py-2 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all flex items-center gap-2 text-[10px] md:text-xs font-mono tracking-widest"
             >
-              <Languages className="w-4 h-4" />
-              {lang === 'en' ? '中文' : 'ENGLISH'}
+              <Languages className="w-3 h-3 md:w-4 md:h-4" />
+              <span className="hidden sm:inline">{lang === 'en' ? '中文' : 'ENGLISH'}</span>
+              <span className="sm:hidden">{lang === 'en' ? 'CN' : 'EN'}</span>
             </button>
           </div>
         )}
       </div>
 
       {/* Game Canvas */}
-      <div className="relative group crt-effect game-canvas-container shadow-[0_0_100px_rgba(59,130,246,0.15)] border border-white/10 rounded-lg overflow-hidden">
+      <div className="relative group crt-effect game-canvas-container shadow-[0_0_100px_rgba(59,130,246,0.15)] border border-white/10 rounded-lg overflow-hidden w-[95vw] max-w-[1000px] aspect-[1000/700]">
         <canvas
           ref={canvasRef}
           width={GAME_WIDTH}
@@ -691,22 +794,22 @@ export default function App() {
             e.preventDefault();
             handleCanvasClick(e);
           }}
-          className="max-w-full max-h-[80vh] object-contain cursor-crosshair"
+          className="w-full h-full object-contain cursor-crosshair"
         />
       </div>
 
       {/* Bottom HUD - Ammo Status */}
-      <div className="mt-6 flex gap-16 text-zinc-400 font-mono text-xs z-10">
+      <div className="mt-4 md:mt-6 flex gap-4 sm:gap-8 md:gap-16 text-zinc-400 font-mono text-[10px] md:text-xs z-10">
         {turretsRef.current.map((turret, i) => (
-          <div key={i} className={`flex flex-col items-center gap-2 ${turret.destroyed ? 'opacity-20' : ''}`}>
-            <div className="w-12 h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-white/5">
+          <div key={i} className={`flex flex-col items-center gap-1 md:gap-2 ${turret.destroyed ? 'opacity-20' : ''}`}>
+            <div className="w-8 sm:w-10 md:w-12 h-1 md:h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-white/5">
               <div 
                 className={`h-full transition-all duration-300 ${turret.ammo < 10 ? 'bg-red-500' : 'bg-emerald-500'}`}
                 style={{ width: `${(turret.ammo / turret.maxAmmo) * 100}%` }}
               />
             </div>
-            <span className={`tracking-widest ${turret.ammo === 0 ? 'text-red-500 animate-pulse' : ''}`}>
-              {i === 1 ? 'CENTER' : i === 0 ? 'LEFT' : 'RIGHT'}: {turret.ammo}
+            <span className="tracking-tighter sm:tracking-widest scale-90 sm:scale-100">
+              {i === 1 ? 'CTR' : i === 0 ? 'L' : 'R'}: {turret.ammo}
             </span>
           </div>
         ))}
@@ -719,16 +822,25 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-xl p-8 text-center"
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-xl p-4 md:p-8 text-center overflow-y-auto"
           >
             {/* Language Toggle on Start Screen */}
-            <div className="absolute top-6 right-6">
+            <div className="absolute top-4 right-4 md:top-6 md:right-6 flex gap-2 md:gap-4">
+              <button 
+                onClick={() => {
+                  const muted = soundManager.toggleMute();
+                  setIsMuted(muted);
+                }}
+                className="p-2 md:p-3 bg-white/10 border border-white/20 rounded-full hover:bg-white/20 transition-all text-white"
+              >
+                {isMuted ? <VolumeX className="w-5 h-5 md:w-6 md:h-6" /> : <Volume2 className="w-5 h-5 md:w-6 md:h-6" />}
+              </button>
               <button 
                 onClick={() => setLang(l => l === 'en' ? 'cn' : 'en')}
-                className="px-6 py-3 bg-white/10 border border-white/20 rounded-full hover:bg-white/20 transition-all flex items-center gap-3 text-sm font-mono tracking-widest text-white"
+                className="px-4 py-2 md:px-6 md:py-3 bg-white/10 border border-white/20 rounded-full hover:bg-white/20 transition-all flex items-center gap-2 md:gap-3 text-xs md:text-sm font-mono tracking-widest text-white"
               >
-                <Languages className="w-5 h-5" />
-                {lang === 'en' ? '切换至中文' : 'SWITCH TO ENGLISH'}
+                <Languages className="w-4 h-4 md:w-5 md:h-5" />
+                <span>{lang === 'en' ? '中文' : 'ENGLISH'}</span>
               </button>
             </div>
 
@@ -736,32 +848,33 @@ export default function App() {
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
-              className="mb-12"
+              className="mb-6 md:mb-12 mt-12 md:mt-0 relative"
             >
-              <h1 className="text-7xl md:text-9xl font-display font-bold text-white mb-2 tracking-tighter glitch-text">
+              <div className="absolute -inset-10 bg-blue-500/20 blur-[100px] rounded-full animate-pulse"></div>
+              <h1 className="text-4xl sm:text-6xl md:text-9xl font-display font-bold text-white mb-2 tracking-tighter glitch-text relative z-10">
                 {t.title.split(' ').map((word, i) => (
                   <span key={i} className={i === 0 ? 'text-blue-500' : ''}>{word} </span>
                 ))}
               </h1>
-              <div className="h-1 w-64 bg-gradient-to-r from-transparent via-blue-500 to-transparent mx-auto"></div>
+              <div className="h-0.5 md:h-1 w-32 md:w-64 bg-gradient-to-r from-transparent via-blue-500 to-transparent mx-auto relative z-10"></div>
             </motion.div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mb-16">
-              <div className="bg-white/5 border border-white/10 p-6 rounded-2xl text-left">
-                <div className="flex items-center gap-3 text-blue-400 mb-4 font-display">
-                  <Info className="w-5 h-5" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 max-w-4xl mb-8 md:mb-16 w-full">
+              <div className="bg-white/5 border border-white/10 p-4 md:p-6 rounded-xl md:rounded-2xl text-left">
+                <div className="flex items-center gap-3 text-blue-400 mb-2 md:mb-4 font-display text-sm md:text-base">
+                  <Info className="w-4 h-4 md:w-5 md:h-5" />
                   <span className="uppercase tracking-widest">{lang === 'cn' ? '玩法说明' : 'HOW TO PLAY'}</span>
                 </div>
-                <div className="text-zinc-400 text-sm whitespace-pre-line leading-relaxed font-mono">
+                <div className="text-zinc-400 text-xs md:text-sm whitespace-pre-line leading-relaxed font-mono">
                   {t.instructions}
                 </div>
               </div>
-              <div className="bg-white/5 border border-white/10 p-6 rounded-2xl text-left">
-                <div className="flex items-center gap-3 text-emerald-400 mb-4 font-display">
-                  <Shield className="w-5 h-5" />
+              <div className="bg-white/5 border border-white/10 p-4 md:p-6 rounded-xl md:rounded-2xl text-left">
+                <div className="flex items-center gap-3 text-emerald-400 mb-2 md:mb-4 font-display text-sm md:text-base">
+                  <Shield className="w-4 h-4 md:w-5 md:h-5" />
                   <span className="uppercase tracking-widest">{lang === 'cn' ? '防御目标' : 'MISSION'}</span>
                 </div>
-                <ul className="text-zinc-400 text-sm space-y-3 font-mono">
+                <ul className="text-zinc-400 text-xs md:text-sm space-y-2 md:space-y-3 font-mono">
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
                     {lang === 'cn' ? '保护6座蓝色城市建筑' : 'Protect 6 blue city structures'}
@@ -778,17 +891,17 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-6 mb-12">
+            <div className="flex flex-col sm:flex-row gap-4 md:gap-6 mb-8 md:mb-12">
               <button 
                 onClick={() => initGame(GameMode.CLASSIC)}
-                className="group relative px-12 py-5 bg-blue-600 hover:bg-blue-500 text-white font-display font-bold text-xl rounded-full transition-all hover:scale-105 active:scale-95 shadow-[0_0_50px_rgba(37,99,235,0.4)]"
+                className="group relative px-8 py-3 md:px-12 md:py-5 bg-blue-600 hover:bg-blue-500 text-white font-display font-bold text-lg md:text-xl rounded-full transition-all hover:scale-105 active:scale-95 shadow-[0_0_50px_rgba(37,99,235,0.4)]"
               >
                 <span className="relative z-10 uppercase tracking-widest">{t.classicMode}</span>
                 <div className="absolute inset-0 rounded-full bg-blue-400 blur-2xl opacity-0 group-hover:opacity-30 transition-opacity"></div>
               </button>
               <button 
                 onClick={() => initGame(GameMode.ENDLESS)}
-                className="group relative px-12 py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-display font-bold text-xl rounded-full transition-all hover:scale-105 active:scale-95 shadow-[0_0_50px_rgba(79,70,229,0.4)]"
+                className="group relative px-8 py-3 md:px-12 md:py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-display font-bold text-lg md:text-xl rounded-full transition-all hover:scale-105 active:scale-95 shadow-[0_0_50px_rgba(79,70,229,0.4)]"
               >
                 <span className="relative z-10 uppercase tracking-widest">{t.endlessMode}</span>
                 <div className="absolute inset-0 rounded-full bg-indigo-400 blur-2xl opacity-0 group-hover:opacity-30 transition-opacity"></div>
@@ -801,28 +914,28 @@ export default function App() {
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-2xl p-8 text-center"
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-2xl p-4 md:p-8 text-center overflow-y-auto"
           >
-            <div className={`text-8xl md:text-[10rem] font-display font-bold mb-8 tracking-tighter glitch-text ${gameState === GameState.WON ? 'text-emerald-500' : 'text-red-500'}`}>
+            <div className={`text-5xl sm:text-7xl md:text-[10rem] font-display font-bold mb-4 md:mb-8 tracking-tighter glitch-text ${gameState === GameState.WON ? 'text-emerald-500' : 'text-red-500'}`}>
               {gameState === GameState.WON ? t.victory : t.defeat}
             </div>
             
-            <div className="flex flex-col md:flex-row gap-8 mb-16">
-              <div className="bg-white/5 border border-white/10 rounded-3xl p-10 min-w-[240px]">
-                <div className="text-zinc-500 font-mono text-xs uppercase tracking-[0.4em] mb-4">{t.score}</div>
-                <div className="text-6xl font-display text-white">{score}</div>
+            <div className="flex flex-col sm:flex-row gap-4 md:gap-8 mb-8 md:mb-16">
+              <div className="bg-white/5 border border-white/10 rounded-2xl md:rounded-3xl p-6 md:p-10 min-w-[160px] md:min-w-[240px]">
+                <div className="text-zinc-500 font-mono text-[10px] md:text-xs uppercase tracking-[0.4em] mb-2 md:mb-4">{t.score}</div>
+                <div className="text-4xl md:text-6xl font-display text-white">{score}</div>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-3xl p-10 min-w-[240px]">
-                <div className="text-zinc-500 font-mono text-xs uppercase tracking-[0.4em] mb-4">{lang === 'cn' ? '存活时间' : 'TIME'}</div>
-                <div className="text-6xl font-display text-white">{Math.floor(displayTime)}s</div>
+              <div className="bg-white/5 border border-white/10 rounded-2xl md:rounded-3xl p-6 md:p-10 min-w-[160px] md:min-w-[240px]">
+                <div className="text-zinc-500 font-mono text-[10px] md:text-xs uppercase tracking-[0.4em] mb-2 md:mb-4">{lang === 'cn' ? '存活时间' : 'TIME'}</div>
+                <div className="text-4xl md:text-6xl font-display text-white">{Math.floor(displayTime)}s</div>
               </div>
             </div>
 
             <button 
               onClick={() => setGameState(GameState.START)}
-              className="flex items-center gap-4 px-12 py-5 bg-white text-black hover:bg-zinc-200 font-display font-bold text-xl rounded-full transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(255,255,255,0.2)]"
+              className="flex items-center gap-3 md:gap-4 px-8 py-4 md:px-12 md:py-5 bg-white text-black hover:bg-zinc-200 font-display font-bold text-lg md:text-xl rounded-full transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(255,255,255,0.2)]"
             >
-              <RefreshCw className="w-6 h-6" />
+              <RefreshCw className="w-5 h-5 md:w-6 md:h-6" />
               <span className="uppercase tracking-widest">{t.playAgain}</span>
             </button>
           </motion.div>
