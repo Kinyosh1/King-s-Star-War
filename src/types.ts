@@ -23,7 +23,7 @@ export interface PowerUp {
   type: PowerUpType;
   x: number;
   y: number;
-  speed: number;
+  timer: number;
   collected: boolean;
 }
 

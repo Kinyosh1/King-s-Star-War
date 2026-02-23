@@ -35,7 +35,7 @@ export const TRANSLATIONS: Record<'en' | 'cn', GameTranslations> = {
     level: "WAVE",
     classicMode: "CLASSIC",
     endlessMode: "ENDLESS",
-    instructions: "1. Click to launch interceptors.\n2. Aim ahead of the targets.\n3. Explosions destroy nearby rockets.\n4. Protect the 6 cities and 3 bases.\n5. Score 1000 to win (Classic) or survive as long as possible (Endless)!\n\nPOWER-UPS (Hit to collect):\n❤️ Health: Heal/Revive turret or city.\n🛡️ Shield: Protect turret from 1 hit.\n🔋 Ammo: +10 ammo to all bases.\n⚡ Super: 5x Explosion & 3x Speed.",
+    instructions: "1. Click to launch interceptors.\n2. Aim ahead of the targets.\n3. Explosions destroy nearby rockets.\n4. Protect the 6 cities and 3 bases.\n5. Score 1000 to win (Classic) or survive as long as possible (Endless)!\n\nPOWER-UPS (Endless Mode Only - Hit to collect):\n❤️ Health: Heal/Revive turret or city.\n🛡️ Shield: Protect turret from 1 hit.\n🔋 Ammo: +10 ammo to all bases.\n⚡ Super: 5x Explosion & 3x Speed.",
   },
   cn: {
     title: "King的星际战争",
@@ -48,6 +48,6 @@ export const TRANSLATIONS: Record<'en' | 'cn', GameTranslations> = {
     level: "波次",
     classicMode: "经典模式",
     endlessMode: "无尽模式",
-    instructions: "1. 点击屏幕发射拦截导弹。\n2. 预判敌方轨迹进行提前瞄准。\n3. 爆炸产生的范围伤害可摧毁火箭。\n4. 保护底部的6座城市和3个基地。\n5. 经典模式1000分获胜，无尽模式挑战极限！\n\n道具系统 (击中获取):\n❤️ 医疗: 恢复/复活炮塔或城市。\n🛡️ 护盾: 蓝色护盾抵御一次攻击。\n🔋 弹药: 所有炮塔弹药+10。\n⚡ 强化: 5倍爆炸范围 & 3倍飞行速度。",
+    instructions: "1. 点击屏幕发射拦截导弹。\n2. 预判敌方轨迹进行提前瞄准。\n3. 爆炸产生的范围伤害可摧毁火箭。\n4. 保护底部的6座城市和3个基地。\n5. 经典模式1000分获胜，无尽模式挑战极限！\n\n道具系统 (仅限无尽模式 - 击中获取):\n❤️ 医疗: 恢复/复活炮塔或城市。\n🛡️ 护盾: 蓝色护盾抵御一次攻击。\n🔋 弹药: 所有炮塔弹药+10。\n⚡ 强化: 5倍爆炸范围 & 3倍飞行速度。",
   }
 };

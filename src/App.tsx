@@ -58,7 +58,7 @@ export default function App() {
   const requestRef = useRef<number>();
   const startTimeRef = useRef<number>(0);
   const gameTimeRef = useRef<number>(0);
-  const lastPowerUpScoreRef = useRef<number>(0);
+  const lastPowerUpTimeRef = useRef<number>(0);
   const superMissileTimerRef = useRef<number>(0);
   const t = TRANSLATIONS[lang];
 
@@ -101,7 +101,7 @@ export default function App() {
     setScore(0);
     setDisplayTime(0);
     gameTimeRef.current = 0;
-    lastPowerUpScoreRef.current = 0;
+    lastPowerUpTimeRef.current = 0;
     superMissileTimerRef.current = 0;
     startTimeRef.current = Date.now();
     setGameState(GameState.PLAYING);
@@ -131,22 +131,25 @@ export default function App() {
   }, []);
 
   const spawnPowerUp = useCallback(() => {
-    const types = [
-      PowerUpType.HEALTH, 
-      PowerUpType.SHIELD, 
-      PowerUpType.AMMO, 
-      PowerUpType.AMMO, // Higher probability for ammo
-      PowerUpType.SUPER_MISSILE
-    ];
-    const type = types[Math.floor(Math.random() * types.length)];
-    const speed = ROCKET_MAX_SPEED * 1.5;
+    const rand = Math.random();
+    let type: PowerUpType;
+    
+    if (rand < 0.25) {
+      type = PowerUpType.HEALTH;
+    } else if (rand < 0.50) {
+      type = PowerUpType.SHIELD;
+    } else if (rand < 0.85) {
+      type = PowerUpType.AMMO;
+    } else {
+      type = PowerUpType.SUPER_MISSILE;
+    }
     
     powerUpsRef.current.push({
       id: Math.random().toString(36).substr(2, 9),
       type,
-      x: -50,
-      y: 50 + Math.random() * 150,
-      speed,
+      x: 100 + Math.random() * (GAME_WIDTH - 200),
+      y: 100 + Math.random() * (GAME_HEIGHT - 300),
+      timer: 3, // 3 seconds
       collected: false
     });
   }, []);
@@ -213,11 +216,17 @@ export default function App() {
       superMissileTimerRef.current -= deltaTime;
     }
 
-    // Check for power-up spawn
-    const threshold = gameMode === GameMode.CLASSIC ? 200 : 100;
-    if (score >= lastPowerUpScoreRef.current + threshold) {
-      lastPowerUpScoreRef.current = Math.floor(score / threshold) * threshold;
-      spawnPowerUp();
+    // Check for power-up spawn (Endless mode only, every 10s)
+    if (gameMode === GameMode.ENDLESS) {
+      if (gameTimeRef.current >= lastPowerUpTimeRef.current + 10) {
+        lastPowerUpTimeRef.current = Math.floor(gameTimeRef.current / 10) * 10;
+        spawnPowerUp();
+      }
+    }
+
+    // Update UI time occasionally (every 0.5s) to save performance
+    if (Math.floor(gameTimeRef.current * 2) > Math.floor(displayTime * 2)) {
+      setDisplayTime(gameTimeRef.current);
     }
 
     const canvas = canvasRef.current;
@@ -334,20 +343,45 @@ export default function App() {
           done: false
         });
       }
+
+      // Direct hit on power-ups
+      powerUpsRef.current.forEach(pu => {
+        const dist = Math.sqrt(Math.pow(pu.x - missile.current.x, 2) + Math.pow(pu.y - missile.current.y, 2));
+        if (dist < 15) { // Slightly larger hit box for missiles
+          missile.exploded = true;
+          pu.collected = true;
+          applyPowerUp(pu.type);
+          
+          // Create a small explosion for feedback
+          explosionsRef.current.push({
+            id: Math.random().toString(),
+            x: pu.x,
+            y: pu.y,
+            radius: 0,
+            maxRadius: 30,
+            growing: true,
+            done: false
+          });
+        }
+      });
     });
     missilesRef.current = missilesRef.current.filter(m => !m.exploded);
 
     // Update & Draw Power-Ups
     powerUpsRef.current.forEach(pu => {
-      pu.x += pu.speed;
+      pu.timer -= deltaTime;
       
-      // Draw Power-Up
+      // Draw Power-Up (3x size of enemy rocket which is arc radius 3)
+      const puRadius = 20; 
       ctx.save();
       ctx.shadowBlur = 15;
       ctx.shadowColor = pu.type === PowerUpType.HEALTH ? '#ef4444' : pu.type === PowerUpType.SHIELD ? '#3b82f6' : pu.type === PowerUpType.AMMO ? '#10b981' : '#f59e0b';
       
+      // Pulse effect for timer
+      const scale = 1 + Math.sin(gameTimeRef.current * 10) * 0.1;
+      
       ctx.beginPath();
-      ctx.arc(pu.x, pu.y, 15, 0, Math.PI * 2);
+      ctx.arc(pu.x, pu.y, puRadius * scale, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
       ctx.fill();
       ctx.strokeStyle = '#fff';
@@ -355,14 +389,14 @@ export default function App() {
       ctx.stroke();
 
       ctx.fillStyle = '#fff';
-      ctx.font = '14px Arial';
+      ctx.font = 'bold 24px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const icon = pu.type === PowerUpType.HEALTH ? '❤️' : pu.type === PowerUpType.SHIELD ? '🛡️' : pu.type === PowerUpType.AMMO ? '🔋' : '⚡';
       ctx.fillText(icon, pu.x, pu.y);
       ctx.restore();
 
-      if (pu.x > GAME_WIDTH + 50) pu.collected = true;
+      if (pu.timer <= 0) pu.collected = true;
     });
     powerUpsRef.current = powerUpsRef.current.filter(pu => !pu.collected);
 
@@ -407,7 +441,10 @@ export default function App() {
 
           setScore(s => {
             const newScore = s + 20;
-            if (gameMode === GameMode.CLASSIC && newScore >= WIN_SCORE) setGameState(GameState.WON);
+            if (gameMode === GameMode.CLASSIC && newScore >= WIN_SCORE) {
+              setGameState(GameState.WON);
+              setDisplayTime(gameTimeRef.current);
+            }
             return newScore;
           });
         }
@@ -498,6 +535,7 @@ export default function App() {
 
     if (turretsRef.current.every(t => t.destroyed)) {
       setGameState(GameState.LOST);
+      setDisplayTime(gameTimeRef.current);
     }
 
     requestRef.current = requestAnimationFrame(animate);
