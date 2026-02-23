@@ -106,46 +106,8 @@ class SoundManager {
     osc.stop(this.ctx.currentTime + 0.2);
   }
 
-  // Simple BGM loop
-  startBGM() {
-    this.init();
-    if (!this.ctx || !this.masterGain || this.bgmOscillator) return;
-
-    // We'll use a simple low-frequency drone for space feel
-    const osc = this.ctx.createOscillator();
-    const lfo = this.ctx.createOscillator();
-    const lfoGain = this.ctx.createGain();
-    const filter = this.ctx.createBiquadFilter();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'sawtooth';
-    osc.frequency.value = 55; // A1
-
-    lfo.type = 'sine';
-    lfo.frequency.value = 0.5;
-    lfoGain.gain.value = 10;
-
-    filter.type = 'lowpass';
-    filter.frequency.value = 200;
-
-    gain.gain.value = 0.05;
-
-    lfo.connect(lfoGain);
-    lfoGain.connect(osc.frequency);
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.masterGain);
-
-    osc.start();
-    lfo.start();
-    this.bgmOscillator = osc;
-  }
-
   stopBGM() {
-    if (this.bgmOscillator) {
-      this.bgmOscillator.stop();
-      this.bgmOscillator = null;
-    }
+    // BGM removed
   }
 }
 

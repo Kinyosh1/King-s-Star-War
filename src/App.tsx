@@ -115,7 +115,6 @@ export default function App() {
     superMissileTimerRef.current = 0;
     startTimeRef.current = Date.now();
     setGameState(GameState.PLAYING);
-    soundManager.startBGM();
   }, []);
 
   const spawnRocket = useCallback(() => {
@@ -650,7 +649,7 @@ export default function App() {
     return () => clearTimeout(spawnTimeout);
   }, [gameState, spawnRocket]);
 
-  const handleCanvasClick = (e: React.MouseEvent | React.TouchEvent) => {
+  const handleCanvasClick = (e: React.MouseEvent | React.TouchEvent | React.PointerEvent) => {
     if (gameState !== GameState.PLAYING) return;
 
     const canvas = canvasRef.current;
@@ -663,8 +662,8 @@ export default function App() {
       clientX = e.touches[0].clientX;
       clientY = e.touches[0].clientY;
     } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
+      clientX = (e as any).clientX;
+      clientY = (e as any).clientY;
     }
 
     const x = (clientX - rect.left) * (GAME_WIDTH / rect.width);
@@ -742,7 +741,7 @@ export default function App() {
       </div>
 
       {/* Header HUD - Always visible but lower z-index than overlays */}
-      <div className="absolute top-0 left-0 right-0 p-4 md:p-6 flex justify-between items-start z-10 pointer-events-none">
+      <div className="absolute top-0 left-0 right-0 p-4 md:p-6 flex justify-between items-start z-[60] pointer-events-none">
         <div className="flex flex-col gap-1 md:gap-2">
           <div className="flex items-center gap-2 md:gap-3 text-emerald-400 font-display text-lg md:text-2xl tracking-widest glitch-text">
             <Trophy className="w-5 h-5 md:w-6 md:h-6" />
@@ -789,12 +788,11 @@ export default function App() {
           ref={canvasRef}
           width={GAME_WIDTH}
           height={GAME_HEIGHT}
-          onMouseDown={handleCanvasClick}
-          onTouchStart={(e) => {
-            e.preventDefault();
+          onPointerDown={(e) => {
+            // PointerDown handles both touch and mouse consistently
             handleCanvasClick(e);
           }}
-          className="w-full h-full object-contain cursor-crosshair"
+          className="w-full h-full object-contain cursor-crosshair touch-none"
         />
       </div>
 
@@ -825,7 +823,7 @@ export default function App() {
             className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-xl p-4 md:p-8 text-center overflow-y-auto"
           >
             {/* Language Toggle on Start Screen */}
-            <div className="absolute top-4 right-4 md:top-6 md:right-6 flex gap-2 md:gap-4">
+            <div className="absolute top-4 right-4 md:top-6 md:right-6 flex gap-2 md:gap-4 z-[70]">
               <button 
                 onClick={() => {
                   const muted = soundManager.toggleMute();
